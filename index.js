@@ -1,77 +1,69 @@
+const { defaultDependency, html, css, minify, images } = require('./Plugins');
+
 const cliSelect = require('cli-select');
 const chalk = require('chalk');
-const { readFile, writeFile } = require('fs');
+const { readFileSync, writeFileSync } = require('fs');
 
 const packagePath = './package.json';
 
-const html = {
-  pug: '^0.0.3',
-  handlebars: '^0.4.0',
+const dependencies = [];
+
+const pushToDependencies = (payload) => {
+  const { value } = payload || 0;
+  console.log(value);
+  switch (value) {
+    case 'css&js minified':
+      dependencies.push(...Object.entries(minify));
+      break;
+
+    default:
+      break;
+  }
+  const [name, version] = value;
+  if (!version) dependencies.push(value);
 };
-const css = {
-  scss: '^2.1.2',
-  less: '^5.1.0',
-  stylys: '^3.4.0',
+
+const valueRenderer = (values, selected) => {
+  if (selected) {
+    return chalk.underline.green(values);
+  }
+  return values;
 };
-
-class Dependencies {
-  constructor(deps) {
-    this.deps = deps;
-  }
-
-  get dependencies() {
-    return this.deps;
-  }
-
-  set dependencies(value) {
-    this.deps = [...this.dependencies, value];
-  }
-
-  pushToDependencies({ value }) {
-    if (typeof value !== 'string') this.dependencies(value);
-  }
-}
-
-const dependency = new Dependencies([]);
 
 cliSelect({
-  values: ['html only', ...Object.entries(html)],
-  valueRenderer: (values, selected) => {
-    if (selected) {
-      return chalk.underline.blue(values);
-    }
-    return values;
-  },
+  values: [...Object.entries(html)],
+  valueRenderer,
 })
-  .then(dependency.pushToDependencies)
+  .then(pushToDependencies)
   .then(() =>
     cliSelect({
-      values: ['pure css', ...Object.entries(css)],
-      valueRenderer: (values, selected) => {
-        if (selected) {
-          return chalk.underline.green(values);
-        }
-        return values;
-      },
+      values: [...Object.entries(css)],
+      valueRenderer,
     })
   )
-  .then(dependency.pushToDependencies)
-  .then(() => console.log(Object.fromEntries(dependency.dependencies)));
-
-//   .then(
-//  writeFile(packagePath, JSON.stringify(res), 'utf8', (err, data) => {
-//    if (err) {
-//      console.log(err);
-//      return;
-//    }
-//    console.log(data, ' done');
-//  });
-//    readFile(packagePath, 'utf8', (error, data) => {
-//      if (error) {
-//        console.warn(error);
-//        return;
-//      }
-//      const { dependencies } = JSON.parse(data);
-//      console.log(dependencies);
-//    })
-//  )
+  .then(pushToDependencies)
+  .then(() =>
+    cliSelect({
+      values: ['css&js minified', 'css&js not minified'],
+      valueRenderer,
+    })
+  )
+  .then(pushToDependencies)
+  .then(() => {
+    const package = readFileSync(packagePath);
+    const parsedPackage = JSON.parse(package);
+    const dependency = Object.fromEntries(dependencies);
+    parsedPackage.devDependencies = { ...defaultDependency, ...dependency };
+    writeFileSync(
+      packagePath,
+      JSON.stringify(parsedPackage, null, 2),
+      'utf8',
+      (err, data) => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+        console.log(dependency);
+      }
+    );
+  });
